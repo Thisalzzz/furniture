@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, Html, TransformControls } from '@react-three/drei';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import FurnitureLibrary from '../components/FurnitureLibrary';
 
 export default function CanvasPage() {
@@ -10,20 +10,19 @@ export default function CanvasPage() {
   const [selectedFurniture, setSelectedFurniture] = useState(null);
   const [transformMode, setTransformMode] = useState('translate');
   const navigate = useNavigate();
+  const location = useLocation();
   const planeRef = useRef();
 
-  // Load initial design data
   useEffect(() => {
-    const design = JSON.parse(localStorage.getItem('currentDesign'));
+    const design = location.state?.design || JSON.parse(localStorage.getItem('currentDesign'));
     if (!design) {
       navigate('/room-input');
       return;
     }
-    setRoomData(design);
-    setFurnitureItems(design.furniture || []);
-  }, [navigate]);
+    setRoomData(design.roomData || design);
+    setFurnitureItems(design.furnitureItems || []);
+  }, [navigate, location]);
 
-  // Handle furniture placement
   const placeFurniture = (position, item) => {
     const newItem = {
       ...item,
@@ -35,15 +34,29 @@ export default function CanvasPage() {
     setFurnitureItems(prev => [...prev, newItem]);
   };
 
-  // Save design when unmounting
+  const saveDesign = () => {
+    const designName = prompt('Enter design name:');
+    if (!designName) return;
+
+    const designs = JSON.parse(localStorage.getItem('designs')) || [];
+    const newDesign = {
+      id: Date.now(),
+      name: designName,
+      date: new Date().toLocaleString(),
+      roomData,
+      furnitureItems
+    };
+    
+    localStorage.setItem('designs', JSON.stringify([...designs, newDesign]));
+    alert('Design saved successfully!');
+  };
+
   useEffect(() => {
     return () => {
-      if (roomData) {
-        localStorage.setItem('currentDesign', JSON.stringify({
-          ...roomData,
-          furniture: furnitureItems
-        }));
-      }
+      localStorage.setItem('currentDesign', JSON.stringify({
+        ...roomData,
+        furnitureItems
+      }));
     };
   }, [furnitureItems, roomData]);
 
@@ -52,7 +65,7 @@ export default function CanvasPage() {
   return (
     <div className="w-full h-screen relative">
       <Canvas shadows camera={{ position: [5, 5, 5], fov: 50 }}>
-        {/* ROOM STRUCTURE */}
+        {/* 3D Scene */}
         <mesh
           position={[roomData.width/2, roomData.height/2, roomData.length/2]}
           receiveShadow
@@ -61,23 +74,16 @@ export default function CanvasPage() {
           <meshStandardMaterial color={roomData.wallColor} />
         </mesh>
 
-        {/* FLOOR GRID */}
         <mesh 
           ref={planeRef}
           rotation={[-Math.PI/2, 0, 0]}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (selectedFurniture?.type) {
-              placeFurniture(e.point, selectedFurniture);
-            }
-          }}
+          onClick={(e) => selectedFurniture?.type && placeFurniture(e.point, selectedFurniture)}
           receiveShadow
         >
           <planeGeometry args={[20, 20]} />
           <meshStandardMaterial color="#f0f0f0" transparent opacity={0.3} />
         </mesh>
 
-        {/* FURNITURE ITEMS */}
         {furnitureItems.map((item) => (
           <FurnitureItem
             key={item.id}
@@ -87,7 +93,6 @@ export default function CanvasPage() {
           />
         ))}
 
-        {/* TRANSFORM CONTROLS */}
         {selectedFurniture?.ref && (
           <TransformControls
             object={selectedFurniture.ref.current}
@@ -106,7 +111,6 @@ export default function CanvasPage() {
           />
         )}
 
-        {/* LIGHTING & CONTROLS */}
         <OrbitControls makeDefault enabled={!selectedFurniture} />
         <Grid cellSize={0.5} cellThickness={0.5} />
         <ambientLight intensity={0.5} />
@@ -117,10 +121,18 @@ export default function CanvasPage() {
           shadow-mapSize={[2048, 2048]}
         />
 
-        {/* UI OVERLAY */}
-        <Html wrapperClass="canvas-ui" zIndexRange={[100, 0]}>
+        <Html wrapperClass="canvas-ui">
           <div className="fixed top-4 right-4 bg-white p-4 rounded-lg shadow-md space-y-3 min-w-[200px] z-50">
-            <h3 className="font-semibold">Design Tools</h3>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-semibold">Tools</h3>
+              <button
+                onClick={saveDesign}
+                className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+              >
+                Save
+              </button>
+            </div>
+            
             <select
               value={transformMode}
               onChange={(e) => setTransformMode(e.target.value)}
@@ -130,21 +142,24 @@ export default function CanvasPage() {
               <option value="rotate">Rotate (E)</option>
               <option value="scale">Scale (R)</option>
             </select>
+            
             <button
               onClick={() => setSelectedFurniture(null)}
               className="w-full bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
             >
-              Clear Selection (Q)
+              Clear Selection
             </button>
           </div>
-          
-          <FurnitureLibrary
-            selectedItem={selectedFurniture}
-            onSelect={(item) => setSelectedFurniture(item ? { 
-              ...item, 
-              id: Date.now() 
-            } : null)}
-          />
+
+          <div className="fixed bottom-4 left-4 z-50">
+            <FurnitureLibrary
+              selectedItem={selectedFurniture}
+              onSelect={(item) => setSelectedFurniture(item ? { 
+                ...item, 
+                id: Date.now() 
+              } : null)}
+            />
+          </div>
         </Html>
       </Canvas>
     </div>
@@ -153,7 +168,6 @@ export default function CanvasPage() {
 
 function FurnitureItem({ item, isSelected, onSelect }) {
   const ref = useRef();
-  
   return (
     <mesh
       ref={ref}

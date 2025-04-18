@@ -6,7 +6,7 @@ export default function FurnitureLibrary({ selectedItem, onSelect }) {
     ];
   
     return (
-      <div className="fixed bottom-4 left-4 bg-white p-4 rounded-lg shadow-md z-50">
+      <div className="bg-white p-4 rounded-lg shadow-md">
         <h3 className="text-lg font-semibold mb-4">Furniture Library</h3>
         <div className="grid grid-cols-3 gap-4">
           {FURNITURE_ITEMS.map((item) => (
